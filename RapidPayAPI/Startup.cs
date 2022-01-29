@@ -1,16 +1,17 @@
+using Domain.Repositories;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using Persistance;
+using Persistance.Repositories;
+using RapidPayAPI.Authentication;
+using Service.abstractions;
+using Services;
 
 namespace RapidPayAPI
 {
@@ -26,12 +27,49 @@ namespace RapidPayAPI
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            // services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
+
+            services.AddScoped<ICardRepository, CardRepository>();
+            services.AddScoped<IBalanceRepository, BalanceRepository>();
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<ICardService, CardService>();
+            services.AddScoped<IPaymentService, PaymentService>();
+            services.AddScoped<IUserService, UserService>();
+
+            services.AddDbContext<MainDbContext>(opt => opt.UseInMemoryDatabase("MainDb"));
+
+            services.AddSingleton<IUfeService, UfeService>();
 
             services.AddControllers();
             services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc("v1", new OpenApiInfo { Title = "RapidPayAPI", Version = "v1" });
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "BasicAuth", Version = "v1" });
+                c.AddSecurityDefinition("basic", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "basic",
+                    In = ParameterLocation.Header,
+                    Description = "Basic Authorization header using the Bearer scheme."
+                });
+                c.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
+                    {
+                          new OpenApiSecurityScheme
+                            {
+                                Reference = new OpenApiReference
+                                {
+                                    Type = ReferenceType.SecurityScheme,
+                                    Id = "basic"
+                                }
+                            },
+                            new string[] {}
+                    }
+                });
             });
+
+            services.AddAuthentication("BasicAuthentication")
+                    .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>("BasicAuthentication", null);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -47,7 +85,7 @@ namespace RapidPayAPI
             app.UseHttpsRedirection();
 
             app.UseRouting();
-
+            app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
